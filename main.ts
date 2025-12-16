@@ -1,58 +1,26 @@
-import { Editor, MarkdownView, Notice, Plugin } from 'obsidian';
+import { Plugin, type WorkspaceLeaf } from 'obsidian';
+type TabGroup = { children: WorkspaceLeaf[]; recomputeChildrenDimensions: () => void; };
 
 export default class TabSwap extends Plugin {
-
-	async onload() {
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (_evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new Notice('Simple Command Executed');
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, _view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new Notice('Complex Command Executed');
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
+	onload(): void {
+		this.addCommand({ id: 'swap-tab-left', name: 'Swap Tab Left', repeatable: true, callback: () => this.moveTab(-1),});
+		this.addCommand({ id: 'swap-tab-right', name: 'Swap Tab Right', repeatable: true, callback: () => this.moveTab(1),});
 	}
 
+	private moveTab(direction: -1 | 1): void {
+		const activeLeaf = this.app.workspace.activeLeaf; // Reluctantly use activeLeaf (null-checked) to avoid new leaf/pinned tab issues.
+		if (!activeLeaf) return;
+
+		const tabGroup = activeLeaf.parent as unknown as TabGroup | null;
+		if (!tabGroup?.children?.length || typeof tabGroup.recomputeChildrenDimensions !== 'function') return;
+		const tabList = tabGroup?.children;
+
+		const activeTabIndex = tabList.indexOf(activeLeaf);
+		const activeTabNewIndex = activeTabIndex + direction;
+		if (activeTabIndex === -1 || activeTabNewIndex < 0 || activeTabNewIndex >= tabList.length) return;
+
+		[tabList[activeTabIndex], tabList[activeTabNewIndex]] = [tabList[activeTabNewIndex], tabList[activeTabIndex]];
+		tabGroup.recomputeChildrenDimensions();
+		this.app.workspace.revealLeaf(tabList[activeTabNewIndex]);
+	}
 }
